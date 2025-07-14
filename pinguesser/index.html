@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pin Guesser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .history-item { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .win-message { animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55); }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 100% { opacity: 1; transform: scale(1); } }
+        .pin-input::-webkit-outer-spin-button, .pin-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .pin-input[type=number] { -moz-appearance: textfield; }
+        .numpad-btn { transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out, opacity 0.2s ease-in-out; }
+        .numpad-btn:active:not(:disabled) { transform: scale(0.95); }
+        .pin-input:disabled {
+            background-color: #d1fae5; /* Tailwind green-100 */
+            color: #065f46; /* Tailwind green-800 */
+            font-weight: bold;
+        }
+        .dark .pin-input:disabled {
+            background-color: #064e3b; /* Tailwind green-900 */
+            color: #a7f3d0; /* Tailwind green-300 */
+        }
+        /* Styling für die Auswahl der Ziffernanzahl */
+        .digit-option input:checked + label {
+            background-color: #4f46e5; /* indigo-600 */
+            color: white;
+            border-color: #4f46e5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
+        
+        <!-- === Startbildschirm === -->
+        <div id="settings-screen">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400">Pin Guesser</h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-2">Wähle die Länge des PINs.</p>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-center mb-4">Anzahl der Ziffern</h2>
+                    <div id="digit-options-container" class="flex justify-center gap-4">
+                        <div class="digit-option">
+                            <input type="radio" id="digits-3" name="digit-count" value="3" class="sr-only" checked>
+                            <label for="digits-3" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">3</label>
+                        </div>
+                        <div class="digit-option">
+                            <input type="radio" id="digits-4" name="digit-count" value="4" class="sr-only">
+                            <label for="digits-4" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">4</label>
+                        </div>
+                        <div class="digit-option">
+                            <input type="radio" id="digits-5" name="digit-count" value="5" class="sr-only">
+                            <label for="digits-5" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">5</label>
+                        </div>
+                    </div>
+                </div>
+                <button id="start-game-button" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 transition-transform transform hover:scale-105">Spiel starten</button>
+            </div>
+        </div>
+
+        <!-- === Spielbildschirm (anfangs versteckt) === -->
+        <div id="game-screen" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                 <button id="back-to-settings-button" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">&larr; Zurück zur Auswahl</button>
+                 <p class="text-lg font-semibold">Versuch: <span id="attempt-counter">0</span></p>
+            </div>
+            
+            <div id="game-controls" class="space-y-4 mb-6">
+                <div id="pin-input-container" class="flex justify-center gap-2">
+                    <!-- PIN-Eingabefelder werden hier dynamisch eingefügt -->
+                </div>
+
+                <div id="numpad" class="grid grid-cols-3 gap-2 max-w-xs mx-auto pt-4">
+                    <!-- Ziffernblock wird hier dynamisch eingefügt -->
+                </div>
+
+                <button id="guess-button" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 transition-transform transform hover:scale-105">Raten</button>
+            </div>
+            
+            <div id="message-area" class="text-center min-h-[2.5rem] mb-4"></div>
+
+            <div id="history-container">
+                <h3 class="text-xl font-semibold mb-3 text-center">Verlauf</h3>
+                <div id="history-list" class="space-y-2 max-h-60 overflow-y-auto bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                     <p id="history-placeholder" class="text-center text-gray-500 dark:text-gray-400">Hier erscheinen deine Versuche.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === DOM Elements ===
+        const settingsScreen = document.getElementById('settings-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const startGameButton = document.getElementById('start-game-button');
+        const backToSettingsButton = document.getElementById('back-to-settings-button');
+        
+        const pinInputContainer = document.getElementById('pin-input-container');
+        const guessButton = document.getElementById('guess-button');
+        const messageArea = document.getElementById('message-area');
+        const historyList = document.getElementById('history-list');
+        const historyPlaceholder = document.getElementById('history-placeholder');
+        const gameControls = document.getElementById('game-controls');
+        const numpad = document.getElementById('numpad');
+        const attemptCounter = document.getElementById('attempt-counter');
+
+        // === Game State ===
+        let numberOfDigits = 3;
+        let secretNumber = '';
+        let attempts = 0;
+        let guessHistory = [];
+        let excludedNumbers = [];
+        let potentialNumbers = [];
+        let confirmedNumbers = [];
+        let pinInputs = [];
+
+        // === Functions ===
+        function createNumpad() {
+            numpad.innerHTML = '';
+            const buttons = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'delete'];
+            buttons.forEach(val => {
+                if (val === '') {
+                    numpad.insertAdjacentHTML('beforeend', '<div class="invisible"></div>');
+                } else {
+                    const button = document.createElement('button');
+                    button.dataset.value = val;
+                    button.className = 'numpad-btn bg-gray-200 dark:bg-gray-700 text-2xl font-bold py-3 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600';
+                    button.innerHTML = val === 'delete' ? '⌫' : val;
+                    if (val === 'delete') button.classList.add('flex', 'items-center', 'justify-center');
+                    numpad.appendChild(button);
+                }
+            });
+        }
+        
+        function initializeGame() {
+            const selectedOption = document.querySelector('input[name="digit-count"]:checked');
+            numberOfDigits = parseInt(selectedOption.value, 10);
+
+            const min = Math.pow(10, numberOfDigits - 1);
+            const max = Math.pow(10, numberOfDigits) - 1;
+            secretNumber = String(Math.floor(min + Math.random() * (max - min + 1)));
+            if (secretNumber.length < numberOfDigits) {
+                secretNumber = secretNumber.padStart(numberOfDigits, '0');
+            }
+
+            attempts = 0;
+            guessHistory = [];
+            excludedNumbers = Array.from({ length: numberOfDigits }, () => new Set());
+            potentialNumbers = Array.from({ length: numberOfDigits }, () => new Set());
+            confirmedNumbers = Array(numberOfDigits).fill(null);
+            
+            attemptCounter.textContent = '0';
+            historyList.innerHTML = '';
+            historyPlaceholder.style.display = 'block';
+            messageArea.innerHTML = '';
+            
+            pinInputContainer.innerHTML = '';
+            for (let i = 0; i < numberOfDigits; i++) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'pin-input w-14 h-16 sm:w-16 sm:h-20 text-3xl text-center font-bold bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200';
+                input.maxLength = 1;
+                pinInputContainer.appendChild(input);
+            }
+            pinInputs = document.querySelectorAll('.pin-input');
+            addPinInputEventListeners();
+            
+            pinInputs[0].focus();
+            guessButton.disabled = false;
+            gameControls.classList.remove('opacity-50');
+            
+            updateNumpadAppearance();
+            console.log(`Neues Spiel gestartet (${numberOfDigits} Ziffern). Geheime Zahl: ${secretNumber}`);
+            
+            settingsScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+        }
+
+        function handleGuess() {
+            const userGuess = Array.from(pinInputs).map(input => input.value).join('');
+            if (userGuess.length !== numberOfDigits) {
+                showMessage(`Bitte gib eine ${numberOfDigits}-stellige Zahl ein.`, 'error');
+                return;
+            }
+            
+            attempts++;
+            attemptCounter.textContent = attempts;
+            
+            let correctPositionCount = 0;
+            for (let i = 0; i < numberOfDigits; i++) {
+                if (userGuess[i] === secretNumber[i]) {
+                    correctPositionCount++;
+                }
+            }
+            
+            guessHistory.push({ guess: userGuess, result: correctPositionCount });
+            
+            if (correctPositionCount === 0) {
+                userGuess.split('').forEach((digit, index) => excludedNumbers[index].add(digit));
+            } else if (correctPositionCount > 0) {
+                 userGuess.split('').forEach((digit, index) => {
+                     potentialNumbers[index].add(digit);
+                 });
+            }
+
+            analyzeHistory();
+            lockConfirmedInputs();
+            
+            if (historyPlaceholder.style.display !== 'none') historyPlaceholder.style.display = 'none';
+            addHistoryEntry(userGuess, correctPositionCount);
+
+            if (correctPositionCount === numberOfDigits) {
+                showMessage(`🎉 Gratuliere! Du hast die Zahl ${secretNumber} in ${attempts} Versuchen erraten!`, 'success');
+                endGame();
+            } else {
+                clearInputsForNextGuess();
+            }
+            
+            updateNumpadAppearance();
+        }
+
+        function analyzeHistory() {
+            // Logic Part 1: Compare pairs of guesses
+            for (let i = 0; i < guessHistory.length; i++) {
+                for (let j = i + 1; j < guessHistory.length; j++) {
+                    const guessA = guessHistory[i];
+                    const guessB = guessHistory[j];
+
+                    let diffIndex = -1;
+                    let diffCount = 0;
+                    for (let k = 0; k < numberOfDigits; k++) {
+                        if (guessA.guess[k] !== guessB.guess[k]) {
+                            diffCount++;
+                            diffIndex = k;
+                        }
+                    }
+
+                    if (diffCount !== 1) continue;
+
+                    if (guessB.result - guessA.result === 1) { 
+                        confirmedNumbers[diffIndex] = guessB.guess[diffIndex];
+                    } else if (guessA.result - guessB.result === 1) {
+                        confirmedNumbers[diffIndex] = guessA.guess[diffIndex];
+                    } else if (guessA.result === guessB.result) {
+                        excludedNumbers[diffIndex].add(guessA.guess[diffIndex]);
+                        excludedNumbers[diffIndex].add(guessB.guess[diffIndex]);
+                    }
+                }
+            }
+
+            // Logic Part 2: Check for N-1 confirmed digits case
+            const confirmedCount = confirmedNumbers.filter(n => n !== null).length;
+            if (confirmedCount === numberOfDigits - 1) {
+                guessHistory.forEach(historyEntry => {
+                    if (historyEntry.result === numberOfDigits - 1) {
+                        let unconfirmedIndex = -1;
+                        let matchesConfirmed = true;
+
+                        for (let k = 0; k < numberOfDigits; k++) {
+                            if (confirmedNumbers[k] !== null) {
+                                if (historyEntry.guess[k] !== confirmedNumbers[k]) {
+                                    matchesConfirmed = false;
+                                    break;
+                                }
+                            } else {
+                                unconfirmedIndex = k;
+                            }
+                        }
+
+                        if (matchesConfirmed && unconfirmedIndex !== -1) {
+                            const wrongDigit = historyEntry.guess[unconfirmedIndex];
+                            excludedNumbers[unconfirmedIndex].add(wrongDigit);
+                        }
+                    }
+                });
+            }
+        }
+
+        function lockConfirmedInputs() {
+            confirmedNumbers.forEach((digit, index) => {
+                if (digit !== null) {
+                    pinInputs[index].value = digit;
+                    pinInputs[index].disabled = true;
+                }
+            });
+        }
+        
+        function clearInputsForNextGuess() {
+            pinInputs.forEach((input, index) => {
+                if (!confirmedNumbers[index]) {
+                    input.value = '';
+                }
+            });
+            const firstEmpty = Array.from(pinInputs).find(input => !input.disabled);
+            if (firstEmpty) firstEmpty.focus();
+        }
+
+        function endGame() {
+            pinInputs.forEach(input => input.disabled = true);
+            guessButton.disabled = true;
+            gameControls.classList.add('opacity-50');
+        }
+
+        function showMessage(text, type = 'info') {
+            messageArea.innerHTML = '';
+            const messageEl = document.createElement('p');
+            messageEl.textContent = text;
+            if (type === 'success') messageEl.className = 'text-green-500 font-bold win-message';
+            else if (type === 'error') messageEl.className = 'text-red-500 font-semibold';
+            else messageEl.className = 'text-gray-600 dark:text-gray-400';
+            messageArea.appendChild(messageEl);
+        }
+
+        function addHistoryEntry(guess, result) {
+            const entryDiv = document.createElement('div');
+            entryDiv.className = 'history-item flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded-md shadow-sm';
+            const guessSpan = document.createElement('span');
+            guessSpan.className = 'text-lg font-mono tracking-widest';
+            guessSpan.textContent = guess;
+            const resultSpan = document.createElement('span');
+            resultSpan.className = 'text-lg font-bold px-3 py-1 rounded-full';
+            resultSpan.textContent = result;
+            if (result === 0) resultSpan.classList.add('bg-red-100', 'text-red-700', 'dark:bg-red-900', 'dark:text-red-300');
+            else if (result > 0 && result < numberOfDigits) resultSpan.classList.add('bg-yellow-100', 'text-yellow-700', 'dark:bg-yellow-900', 'dark:text-yellow-300');
+            else if (result === numberOfDigits) resultSpan.classList.add('bg-green-100', 'text-green-700', 'dark:bg-green-900', 'dark:text-green-300');
+            entryDiv.appendChild(guessSpan);
+            entryDiv.appendChild(resultSpan);
+            historyList.prepend(entryDiv);
+        }
+
+        function updateNumpadAppearance() {
+            const currentInput = document.activeElement;
+            const currentIndex = Array.from(pinInputs).indexOf(currentInput);
+            const numpadDigitButtons = document.querySelectorAll('.numpad-btn[data-value]:not([data-value="delete"])');
+
+            numpadDigitButtons.forEach(btn => {
+                const value = btn.dataset.value;
+                btn.disabled = false;
+                let baseClass = 'numpad-btn text-2xl font-bold py-3 rounded-lg';
+                let colorClass = 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600';
+
+                if (currentIndex !== -1) {
+                    if (excludedNumbers[currentIndex].has(value)) {
+                        colorClass = 'bg-red-300 text-red-800 dark:bg-red-800 dark:text-red-200 cursor-not-allowed opacity-50';
+                        btn.disabled = true;
+                    } else if (confirmedNumbers[currentIndex] === value) {
+                        colorClass = 'bg-green-300 text-green-800 dark:bg-green-800 dark:text-green-200 hover:bg-green-400 dark:hover:bg-green-700';
+                    } else if (potentialNumbers[currentIndex].has(value)) {
+                        colorClass = 'bg-yellow-300 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200 hover:bg-yellow-400 dark:hover:bg-yellow-700';
+                    }
+                }
+                
+                btn.className = `${baseClass} ${colorClass}`;
+            });
+        }
+
+        function addPinInputEventListeners() {
+            pinInputs.forEach((input) => {
+                input.addEventListener('focus', updateNumpadAppearance);
+                input.addEventListener('input', (e) => {
+                    const target = e.target;
+                    if (target.value.length > 1) target.value = target.value.slice(0, 1);
+                    
+                    const currentIndex = Array.from(pinInputs).indexOf(target);
+                    if (target.value && currentIndex < pinInputs.length - 1) {
+                        const nextInput = Array.from(pinInputs).find((inp, idx) => idx > currentIndex && !inp.disabled);
+                        if (nextInput) nextInput.focus();
+                    }
+
+                    const allFilled = Array.from(pinInputs).every(i => i.value || i.disabled);
+                    if (allFilled) guessButton.focus();
+                });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !e.target.value) {
+                        const currentIndex = Array.from(pinInputs).indexOf(e.target);
+                        if (currentIndex > 0) {
+                             const prevInput = Array.from(pinInputs).reverse().find((inp, idx) => (pinInputs.length - 1 - idx) < currentIndex && !inp.disabled);
+                             if(prevInput) prevInput.focus();
+                        }
+                    }
+                });
+                input.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleGuess(); });
+            });
+        }
+        
+        function returnToSettings() {
+            gameScreen.classList.add('hidden');
+            settingsScreen.classList.remove('hidden');
+        }
+
+        // === Initial Setup & Event Listeners ===
+        createNumpad();
+        
+        startGameButton.addEventListener('click', initializeGame);
+        backToSettingsButton.addEventListener('click', returnToSettings);
+        guessButton.addEventListener('click', handleGuess);
+        
+        numpad.addEventListener('click', (event) => {
+            const target = event.target.closest('.numpad-btn');
+            if (!target || target.disabled) return;
+
+            const value = target.dataset.value;
+
+            if (value === 'delete') {
+                for (let i = pinInputs.length - 1; i >= 0; i--) {
+                    if (pinInputs[i].value && !pinInputs[i].disabled) {
+                        pinInputs[i].value = '';
+                        pinInputs[i].focus();
+                        break;
+                    }
+                }
+            } else if (value) {
+                const firstEmptyInput = Array.from(pinInputs).find(input => !input.value && !input.disabled);
+                if (firstEmptyInput) {
+                    firstEmptyInput.value = value;
+                    firstEmptyInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+            updateNumpadAppearance();
+        });
+    </script>
+
+</body>
+</html>
