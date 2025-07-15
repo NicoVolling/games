@@ -210,7 +210,7 @@
                 input.maxLength = 1;
                 pinInputContainer.appendChild(input);
             }
-            pinInputs = document.querySelectorAll('.pin-input');
+            pinInputs = pinInputContainer.querySelectorAll('.pin-input');
             addPinInputEventListeners();
             
             pinInputs[0].focus();
@@ -452,7 +452,7 @@
                 input.maxLength = 1;
                 pinInputContainer.appendChild(input);
             }
-            pinInputs = document.querySelectorAll('.pin-input');
+            pinInputs = pinInputContainer.querySelectorAll('.pin-input');
             addPinInputEventListeners();
             if (pinInputs[0]) pinInputs[0].focus();
             multiplayerGameInitialized = true;
