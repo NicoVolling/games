@@ -436,6 +436,28 @@
                 input.addEventListener('keyup', (e) => { if (e.key === 'Enter') handleGuess(); });
             });
         }
+
+        function setupMultiplayerGame() {
+            attempts = 0;
+            guessHistory = [];
+            excludedNumbers = Array.from({ length: numberOfDigits }, () => new Set());
+            potentialNumbers = Array.from({ length: numberOfDigits }, () => new Set());
+            confirmedNumbers = Array(numberOfDigits).fill(null);
+
+            pinInputContainer.innerHTML = '';
+            for (let i = 0; i < numberOfDigits; i++) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'pin-input w-14 h-16 sm:w-16 sm:h-20 text-3xl text-center font-bold bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200';
+                input.maxLength = 1;
+                pinInputContainer.appendChild(input);
+            }
+            pinInputs = document.querySelectorAll('.pin-input');
+            addPinInputEventListeners();
+            if (pinInputs[0]) pinInputs[0].focus();
+            multiplayerGameInitialized = true;
+            updateNumpadAppearance();
+        }
         
         function returnToSettings() {
             gameScreen.classList.add('hidden');
@@ -516,6 +538,7 @@
         let currentSession = null;
         let multiplayerMode = false;
         let secretPinInputs = [];
+        let multiplayerGameInitialized = false;
 
         function showOnly(el) {
             [modeSelectionScreen, settingsScreen, multiplayerScreen, secretScreen, gameScreen].forEach(s => s.classList.add('hidden'));
@@ -636,6 +659,7 @@
 
                 if (currentSession.status === 'playing' || currentSession.status === 'finished') {
                     showOnly(gameScreen);
+                    if (!multiplayerGameInitialized) setupMultiplayerGame();
                     guessButton.disabled = currentSession.currentTurn !== playerId;
                 }
 
