@@ -101,8 +101,9 @@
         <!-- === Geheimzahl Eingabe === -->
         <div id="secret-screen" class="hidden space-y-4">
             <p class="text-center">Gib deine geheime Zahl ein:</p>
-            <input id="secret-input" type="text" class="w-full border rounded-lg p-2 text-center" placeholder="">
+            <div id="secret-pin-container" class="flex justify-center gap-2"></div>
             <button id="secret-submit-button" class="w-full bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700">Bestätigen</button>
+            <p id="secret-waiting-message" class="hidden text-center text-gray-600 dark:text-gray-400">Warte auf zweiten Spieler…</p>
         </div>
 
         <!-- === Spielbildschirm (anfangs versteckt) === -->
@@ -506,13 +507,15 @@
         const joinSessionButton = document.getElementById('join-session-button');
         const joinSessionInput = document.getElementById('join-session-id');
         const playerNameInput = document.getElementById('player-name');
-        const secretInput = document.getElementById('secret-input');
+        const secretPinContainer = document.getElementById('secret-pin-container');
         const secretSubmitButton = document.getElementById('secret-submit-button');
+        const secretWaitingMessage = document.getElementById('secret-waiting-message');
 
         let sessionId = null;
         let playerId = null;
         let currentSession = null;
         let multiplayerMode = false;
+        let secretPinInputs = [];
 
         function showOnly(el) {
             [modeSelectionScreen, settingsScreen, multiplayerScreen, secretScreen, gameScreen].forEach(s => s.classList.add('hidden'));
@@ -521,6 +524,31 @@
 
         function randomSessionId() { return Math.floor(100000 + Math.random() * 900000).toString(); }
         function randomPlayerId() { return Math.random().toString(36).substring(2) + Date.now().toString(36); }
+
+        function setupSecretPinInputs(digits) {
+            secretPinContainer.innerHTML = '';
+            for (let i = 0; i < digits; i++) {
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.className = 'pin-input w-14 h-16 sm:w-16 sm:h-20 text-3xl text-center font-bold bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-200';
+                input.maxLength = 1;
+                secretPinContainer.appendChild(input);
+            }
+            secretPinInputs = secretPinContainer.querySelectorAll('input');
+            secretWaitingMessage.classList.add('hidden');
+            secretSubmitButton.disabled = false;
+            secretPinInputs.forEach((input, idx) => {
+                input.addEventListener('input', () => {
+                    if (input.value.length > 1) input.value = input.value.slice(0,1);
+                    if (input.value && idx < secretPinInputs.length -1) secretPinInputs[idx+1].focus();
+                });
+                input.addEventListener('keydown', e => {
+                    if (e.key === 'Backspace' && !input.value && idx > 0) secretPinInputs[idx-1].focus();
+                });
+                input.addEventListener('keyup', e => { if (e.key === 'Enter') secretSubmitButton.click(); });
+            });
+            if (secretPinInputs[0]) secretPinInputs[0].focus();
+        }
 
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('sessionId')) {
@@ -551,7 +579,7 @@
             joinSessionInput.value = sessionId;
             listenSession();
             alert('Session-ID: ' + sessionId);
-            secretInput.maxLength = digits;
+            setupSecretPinInputs(digits);
             showOnly(secretScreen);
         });
 
@@ -568,12 +596,12 @@
             if (Object.keys(data.players || {}).length >= 2) return alert('Session voll');
             await updateDoc(ref, { [`players.${playerId}`]: { name, secret: '', ready: false }, status: 'setup' });
             listenSession();
-            secretInput.maxLength = data.numberOfDigits;
+            setupSecretPinInputs(data.numberOfDigits);
             showOnly(secretScreen);
         });
 
         secretSubmitButton.addEventListener('click', async () => {
-            const secret = secretInput.value.trim();
+            const secret = Array.from(secretPinInputs).map(i => i.value).join('');
             if (!currentSession) return;
             if (secret.length !== currentSession.numberOfDigits) {
                 alert(`Geheimzahl muss ${currentSession.numberOfDigits} Ziffern haben`);
@@ -583,7 +611,9 @@
                 [`players.${playerId}.secret`]: secret,
                 [`players.${playerId}.ready`]: true
             });
+            secretPinInputs.forEach(i => i.disabled = true);
             secretSubmitButton.disabled = true;
+            secretWaitingMessage.classList.remove('hidden');
         });
 
         function listenSession() {
