@@ -126,14 +126,20 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
-        import { firebaseConfig } from "./firebase-config.js";
-        // firebase-config.js should export your own Firebase credentials
+        let db, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion;
+        let firebaseReady = false;
 
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        try {
+            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+            const firestore = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+            const { firebaseConfig } = await import('./firebase-config.js');
+            const app = initializeApp(firebaseConfig);
+            db = firestore.getFirestore(app);
+            ({ doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion } = firestore);
+            firebaseReady = true;
+        } catch (err) {
+            console.warn('Firebase konnte nicht initialisiert werden. Multiplayer ist deaktiviert.', err);
+        }
 
         // === DOM Elements ===
         const settingsScreen = document.getElementById('settings-screen');
@@ -161,6 +167,11 @@
         const gameControls = document.getElementById('game-controls');
         const numpad = document.getElementById('numpad');
         const attemptCounter = document.getElementById('attempt-counter');
+
+        if (!firebaseReady) {
+            multiPlayerBtn.disabled = true;
+            multiPlayerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
 
         // === Game State ===
         let numberOfDigits = 3;
@@ -475,6 +486,7 @@
         }
 
         function showMultiplayerSetup(codePresent = false) {
+            if (!firebaseReady) { alert('Multiplayer ist nicht verf\u00fcgbar.'); return; }
             modeScreen.classList.add('hidden');
             multiplayerSetup.classList.remove('hidden');
             settingsScreen.classList.add('hidden');
@@ -497,6 +509,7 @@
         }
 
         async function createSession() {
+            if (!firebaseReady) { alert('Multiplayer ist nicht verf\u00fcgbar.'); return; }
             const name = mpNameInput.value.trim();
             mySecret = mpSecretInput.value.trim();
             if (!name || !mySecret) return;
@@ -513,6 +526,7 @@
         }
 
         async function joinSession() {
+            if (!firebaseReady) { alert('Multiplayer ist nicht verf\u00fcgbar.'); return; }
             const code = new URLSearchParams(location.search).get('session');
             if (!code) return;
             const name = mpNameInput.value.trim();
@@ -529,6 +543,7 @@
         }
 
         function listenToSession() {
+            if (!firebaseReady) return;
             onSnapshot(sessionRef, (snap) => {
                 const data = snap.data();
                 if (!data) return;
@@ -551,7 +566,7 @@
         createNumpad();
 
         const urlSession = new URLSearchParams(location.search).get('session');
-        if (urlSession) {
+        if (urlSession && firebaseReady) {
             sessionCodeEl.textContent = urlSession;
             showMultiplayerSetup(true);
         } else {
