@@ -38,9 +38,16 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
-        
-        <!-- === Startbildschirm === -->
-        <div id="settings-screen">
+
+        <!-- === Modus Auswahl === -->
+        <div id="mode-selection-screen" class="text-center space-y-4">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400 mb-6">Pin Guesser</h1>
+            <button id="singleplayer-button" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700">Einzelspieler</button>
+            <button id="multiplayer-button" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700">Multiplayer</button>
+        </div>
+
+        <!-- === Einstellungen Einzelspieler === -->
+        <div id="settings-screen" class="hidden">
             <div class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400">Pin Guesser</h1>
                 <p class="text-gray-600 dark:text-gray-400 mt-2">Wähle die Länge des PINs.</p>
@@ -65,6 +72,37 @@
                 </div>
                 <button id="start-game-button" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 transition-transform transform hover:scale-105">Spiel starten</button>
             </div>
+        </div>
+
+        <!-- === Multiplayer Lobby === -->
+        <div id="multiplayer-screen" class="hidden space-y-4">
+            <div>
+                <label for="player-name" class="block mb-2 font-semibold">Dein Name</label>
+                <input id="player-name" type="text" class="w-full border rounded-lg p-2" placeholder="Name">
+            </div>
+            <div id="multi-digit-options" class="space-y-2">
+                <h2 class="text-lg font-semibold text-center">Anzahl der Ziffern</h2>
+                <div class="flex justify-center gap-4">
+                    <div class="digit-option"><input type="radio" id="mdigits-3" name="multi-digit-count" value="3" class="sr-only" checked><label for="mdigits-3" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">3</label></div>
+                    <div class="digit-option"><input type="radio" id="mdigits-4" name="multi-digit-count" value="4" class="sr-only"><label for="mdigits-4" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">4</label></div>
+                    <div class="digit-option"><input type="radio" id="mdigits-5" name="multi-digit-count" value="5" class="sr-only"><label for="mdigits-5" class="block w-20 text-center text-lg font-bold py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 cursor-pointer transition-colors">5</label></div>
+                </div>
+            </div>
+            <div>
+                <label for="join-session-id" class="block mb-2 font-semibold">Session ID (6 Ziffern)</label>
+                <input id="join-session-id" type="text" maxlength="6" class="w-full border rounded-lg p-2" placeholder="123456">
+            </div>
+            <div class="flex gap-2">
+                <button id="create-session-button" class="flex-1 bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700">Session erstellen</button>
+                <button id="join-session-button" class="flex-1 bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700">Beitreten</button>
+            </div>
+        </div>
+
+        <!-- === Geheimzahl Eingabe === -->
+        <div id="secret-screen" class="hidden space-y-4">
+            <p class="text-center">Gib deine geheime Zahl ein:</p>
+            <input id="secret-input" type="text" class="w-full border rounded-lg p-2 text-center" placeholder="">
+            <button id="secret-submit-button" class="w-full bg-indigo-600 text-white font-bold px-4 py-2 rounded-lg hover:bg-indigo-700">Bestätigen</button>
         </div>
 
         <!-- === Spielbildschirm (anfangs versteckt) === -->
@@ -189,6 +227,12 @@
             const userGuess = Array.from(pinInputs).map(input => input.value).join('');
             if (userGuess.length !== numberOfDigits) {
                 showMessage(`Bitte gib eine ${numberOfDigits}-stellige Zahl ein.`, 'error');
+                return;
+            }
+
+            if (typeof multiplayerMode !== 'undefined' && multiplayerMode) {
+                processMultiplayerGuess(userGuess);
+                clearInputsForNextGuess();
                 return;
             }
             
@@ -427,6 +471,172 @@
             }
             updateNumpadAppearance();
         });
+
+        async function processMultiplayerGuess(guess) {
+            if (typeof processMultiplayerGuessImpl === 'function') {
+                await processMultiplayerGuessImpl(guess);
+            }
+        }
+    </script>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, arrayUnion } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyDuL5QRvAGf6_aIkUTY_ogqnIefJweHzB8",
+          authDomain: "gamespinguesser.firebaseapp.com",
+          projectId: "gamespinguesser",
+          storageBucket: "gamespinguesser.firebasestorage.app",
+          messagingSenderId: "484798865217",
+          appId: "1:484798865217:web:fe47108f1242504b048bc0",
+          measurementId: "G-RP648YF5X0"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const modeSelectionScreen = document.getElementById('mode-selection-screen');
+        const settingsScreen = document.getElementById('settings-screen');
+        const multiplayerScreen = document.getElementById('multiplayer-screen');
+        const secretScreen = document.getElementById('secret-screen');
+        const singleplayerButton = document.getElementById('singleplayer-button');
+        const multiplayerButton = document.getElementById('multiplayer-button');
+        const createSessionButton = document.getElementById('create-session-button');
+        const joinSessionButton = document.getElementById('join-session-button');
+        const joinSessionInput = document.getElementById('join-session-id');
+        const playerNameInput = document.getElementById('player-name');
+        const secretInput = document.getElementById('secret-input');
+        const secretSubmitButton = document.getElementById('secret-submit-button');
+
+        let sessionId = null;
+        let playerId = null;
+        let currentSession = null;
+        let multiplayerMode = false;
+
+        function showOnly(el) {
+            [modeSelectionScreen, settingsScreen, multiplayerScreen, secretScreen, gameScreen].forEach(s => s.classList.add('hidden'));
+            el.classList.remove('hidden');
+        }
+
+        function randomSessionId() { return Math.floor(100000 + Math.random() * 900000).toString(); }
+        function randomPlayerId() { return Math.random().toString(36).substring(2) + Date.now().toString(36); }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('sessionId')) {
+            showOnly(multiplayerScreen);
+            joinSessionInput.value = urlParams.get('sessionId');
+        } else {
+            showOnly(modeSelectionScreen);
+        }
+
+        singleplayerButton.addEventListener('click', () => showOnly(settingsScreen));
+        multiplayerButton.addEventListener('click', () => showOnly(multiplayerScreen));
+
+        createSessionButton.addEventListener('click', async () => {
+            const name = playerNameInput.value.trim();
+            if (!name) return alert('Name eingeben');
+            const opt = document.querySelector('#multiplayer-screen input[name="multi-digit-count"]:checked');
+            const digits = parseInt(opt.value, 10);
+            sessionId = randomSessionId();
+            playerId = randomPlayerId();
+            await setDoc(doc(db, 'sessions', sessionId), {
+                numberOfDigits: digits,
+                status: 'waiting',
+                currentTurn: playerId,
+                guesses: [],
+                players: { [playerId]: { name, secret: '', ready: false } }
+            });
+            window.history.replaceState({}, '', `?sessionId=${sessionId}`);
+            joinSessionInput.value = sessionId;
+            listenSession();
+            alert('Session-ID: ' + sessionId);
+            secretInput.maxLength = digits;
+            showOnly(secretScreen);
+        });
+
+        joinSessionButton.addEventListener('click', async () => {
+            const name = playerNameInput.value.trim();
+            if (!name) return alert('Name eingeben');
+            sessionId = joinSessionInput.value.trim();
+            if (sessionId.length !== 6) return alert('Session ID hat 6 Ziffern');
+            playerId = randomPlayerId();
+            const ref = doc(db, 'sessions', sessionId);
+            const snap = await getDoc(ref);
+            if (!snap.exists()) return alert('Session nicht gefunden');
+            const data = snap.data();
+            if (Object.keys(data.players || {}).length >= 2) return alert('Session voll');
+            await updateDoc(ref, { [`players.${playerId}`]: { name, secret: '', ready: false }, status: 'setup' });
+            listenSession();
+            secretInput.maxLength = data.numberOfDigits;
+            showOnly(secretScreen);
+        });
+
+        secretSubmitButton.addEventListener('click', async () => {
+            const secret = secretInput.value.trim();
+            if (!currentSession) return;
+            if (secret.length !== currentSession.numberOfDigits) {
+                alert(`Geheimzahl muss ${currentSession.numberOfDigits} Ziffern haben`);
+                return;
+            }
+            await updateDoc(doc(db, 'sessions', sessionId), {
+                [`players.${playerId}.secret`]: secret,
+                [`players.${playerId}.ready`]: true
+            });
+            secretSubmitButton.disabled = true;
+        });
+
+        function listenSession() {
+            const ref = doc(db, 'sessions', sessionId);
+            onSnapshot(ref, snap => {
+                currentSession = snap.data();
+                numberOfDigits = currentSession.numberOfDigits;
+                multiplayerMode = true;
+
+                const players = currentSession.players;
+                const opponentId = Object.keys(players).find(id => id !== playerId);
+
+                if (players[playerId]?.secret && players[opponentId]?.secret && currentSession.status === 'waiting') {
+                    updateDoc(ref, { status: 'playing' });
+                }
+
+                if (currentSession.status === 'playing' || currentSession.status === 'finished') {
+                    showOnly(gameScreen);
+                    guessButton.disabled = currentSession.currentTurn !== playerId;
+                }
+
+                attemptCounter.textContent = currentSession.guesses.filter(g => g.player === playerId).length;
+                renderHistory();
+
+                if (currentSession.status === 'finished') {
+                    const msg = currentSession.winner === playerId ? 'Du hast gewonnen!' : 'Du hast verloren!';
+                    showMessage(msg, 'success');
+                    endGame();
+                }
+            });
+        }
+
+        function renderHistory() {
+            historyList.innerHTML = '';
+            if (!currentSession) return;
+            currentSession.guesses.forEach(g => {
+                if (g.player === playerId) addHistoryEntry(g.guess, g.result);
+            });
+        }
+
+        async function processMultiplayerGuessImpl(guess) {
+            const players = currentSession.players;
+            const opponentId = Object.keys(players).find(id => id !== playerId);
+            const secret = players[opponentId].secret;
+            let correct = 0;
+            for (let i = 0; i < secret.length; i++) if (guess[i] === secret[i]) correct++;
+            await updateDoc(doc(db, 'sessions', sessionId), {
+                guesses: arrayUnion({ player: playerId, guess, result: correct }),
+                currentTurn: opponentId,
+                status: correct === secret.length ? 'finished' : 'playing',
+                winner: correct === secret.length ? playerId : null
+            });
+        }
     </script>
 
 </body>
