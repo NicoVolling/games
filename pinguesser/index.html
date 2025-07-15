@@ -38,7 +38,35 @@
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
-        
+
+        <!-- === Modus Auswahl === -->
+        <div id="mode-screen">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400">Pin Guesser</h1>
+            </div>
+            <div class="space-y-4">
+                <button id="single-player-btn" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700">Einzelspieler</button>
+                <button id="multi-player-btn" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700">Multiplayer</button>
+            </div>
+        </div>
+
+        <!-- === Multiplayer Setup === -->
+        <div id="multiplayer-setup" class="hidden">
+            <div id="session-info" class="text-center mb-4 hidden">
+                <p class="font-semibold">Session-Code: <span id="session-code"></span></p>
+            </div>
+            <div class="space-y-4">
+                <input id="mp-name" type="text" placeholder="Dein Name" class="w-full px-3 py-2 border rounded">
+                <input id="mp-secret" type="number" placeholder="Deine geheime Zahl" class="w-full px-3 py-2 border rounded">
+                <button id="create-session-btn" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700">Session erstellen</button>
+                <button id="join-session-btn" class="w-full bg-indigo-600 text-white font-bold px-6 py-3 rounded-lg hover:bg-indigo-700 hidden">Session beitreten</button>
+            </div>
+            <div id="waiting-screen" class="hidden text-center mt-4">
+                <p>Warte auf zweiten Spieler ...</p>
+            </div>
+            <button id="back-mode-btn" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mt-4">&larr; Zurück</button>
+        </div>
+
         <!-- === Startbildschirm === -->
         <div id="settings-screen">
             <div class="text-center mb-8">
@@ -97,12 +125,33 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, arrayUnion } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+        import { firebaseConfig } from "./firebase-config.js";
+        // firebase-config.js should export your own Firebase credentials
+
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
         // === DOM Elements ===
         const settingsScreen = document.getElementById('settings-screen');
         const gameScreen = document.getElementById('game-screen');
         const startGameButton = document.getElementById('start-game-button');
         const backToSettingsButton = document.getElementById('back-to-settings-button');
+        const modeScreen = document.getElementById('mode-screen');
+        const multiplayerSetup = document.getElementById('multiplayer-setup');
+        const singlePlayerBtn = document.getElementById('single-player-btn');
+        const multiPlayerBtn = document.getElementById('multi-player-btn');
+        const createSessionBtn = document.getElementById('create-session-btn');
+        const joinSessionBtn = document.getElementById('join-session-btn');
+        const backModeBtn = document.getElementById('back-mode-btn');
+        const sessionCodeEl = document.getElementById('session-code');
+        const sessionInfo = document.getElementById('session-info');
+        const mpNameInput = document.getElementById('mp-name');
+        const mpSecretInput = document.getElementById('mp-secret');
+        const waitingScreen = document.getElementById('waiting-screen');
         
         const pinInputContainer = document.getElementById('pin-input-container');
         const guessButton = document.getElementById('guess-button');
@@ -122,6 +171,11 @@
         let potentialNumbers = [];
         let confirmedNumbers = [];
         let pinInputs = [];
+        let isMultiplayer = false;
+        let sessionRef;
+        let playerId = 0;
+        let mySecret = '';
+        let gameStarted = false;
 
         // === Functions ===
         function createNumpad() {
@@ -141,15 +195,23 @@
             });
         }
         
-        function initializeGame() {
-            const selectedOption = document.querySelector('input[name="digit-count"]:checked');
-            numberOfDigits = parseInt(selectedOption.value, 10);
+        function initializeGame(customSecret = null, customDigits = null) {
+            if (customDigits !== null) {
+                numberOfDigits = customDigits;
+            } else {
+                const selectedOption = document.querySelector('input[name="digit-count"]:checked');
+                numberOfDigits = parseInt(selectedOption.value, 10);
+            }
 
-            const min = Math.pow(10, numberOfDigits - 1);
-            const max = Math.pow(10, numberOfDigits) - 1;
-            secretNumber = String(Math.floor(min + Math.random() * (max - min + 1)));
-            if (secretNumber.length < numberOfDigits) {
-                secretNumber = secretNumber.padStart(numberOfDigits, '0');
+            if (customSecret !== null) {
+                secretNumber = String(customSecret);
+            } else {
+                const min = Math.pow(10, numberOfDigits - 1);
+                const max = Math.pow(10, numberOfDigits) - 1;
+                secretNumber = String(Math.floor(min + Math.random() * (max - min + 1)));
+                if (secretNumber.length < numberOfDigits) {
+                    secretNumber = secretNumber.padStart(numberOfDigits, '0');
+                }
             }
 
             attempts = 0;
@@ -191,18 +253,25 @@
                 showMessage(`Bitte gib eine ${numberOfDigits}-stellige Zahl ein.`, 'error');
                 return;
             }
-            
+
             attempts++;
             attemptCounter.textContent = attempts;
-            
+
             let correctPositionCount = 0;
             for (let i = 0; i < numberOfDigits; i++) {
                 if (userGuess[i] === secretNumber[i]) {
                     correctPositionCount++;
                 }
             }
-            
+
             guessHistory.push({ guess: userGuess, result: correctPositionCount });
+
+            if (isMultiplayer && sessionRef) {
+                updateDoc(sessionRef, {
+                    guesses: arrayUnion({ player: playerId, guess: userGuess, result: correctPositionCount }),
+                    turn: playerId === 1 ? 2 : 1
+                });
+            }
             
             if (correctPositionCount === 0) {
                 userGuess.split('').forEach((digit, index) => excludedNumbers[index].add(digit));
@@ -397,12 +466,106 @@
             settingsScreen.classList.remove('hidden');
         }
 
+        // === Multiplayer Helper ===
+        function showMode() {
+            modeScreen.classList.remove('hidden');
+            settingsScreen.classList.add('hidden');
+            multiplayerSetup.classList.add('hidden');
+            gameScreen.classList.add('hidden');
+        }
+
+        function showMultiplayerSetup(codePresent = false) {
+            modeScreen.classList.add('hidden');
+            multiplayerSetup.classList.remove('hidden');
+            settingsScreen.classList.add('hidden');
+            if (codePresent) {
+                createSessionBtn.classList.add('hidden');
+                joinSessionBtn.classList.remove('hidden');
+                sessionInfo.classList.remove('hidden');
+            } else {
+                createSessionBtn.classList.remove('hidden');
+                joinSessionBtn.classList.add('hidden');
+                sessionInfo.classList.add('hidden');
+            }
+        }
+
+        function generateCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+            let c = '';
+            for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+            return c;
+        }
+
+        async function createSession() {
+            const name = mpNameInput.value.trim();
+            mySecret = mpSecretInput.value.trim();
+            if (!name || !mySecret) return;
+            const code = generateCode();
+            sessionCodeEl.textContent = code;
+            sessionInfo.classList.remove('hidden');
+            history.replaceState({}, '', '?session=' + code);
+            sessionRef = doc(db, 'sessions', code);
+            await setDoc(sessionRef, { digits: mySecret.length, player1: { name, secret: mySecret }, turn: 1, guesses: [] });
+            playerId = 1;
+            waitingScreen.classList.remove('hidden');
+            isMultiplayer = true;
+            listenToSession();
+        }
+
+        async function joinSession() {
+            const code = new URLSearchParams(location.search).get('session');
+            if (!code) return;
+            const name = mpNameInput.value.trim();
+            mySecret = mpSecretInput.value.trim();
+            if (!name || !mySecret) return;
+            sessionRef = doc(db, 'sessions', code);
+            const snap = await getDoc(sessionRef);
+            if (!snap.exists()) { alert('Session nicht gefunden'); return; }
+            await updateDoc(sessionRef, { player2: { name, secret: mySecret } });
+            playerId = 2;
+            isMultiplayer = true;
+            sessionCodeEl.textContent = code;
+            listenToSession();
+        }
+
+        function listenToSession() {
+            onSnapshot(sessionRef, (snap) => {
+                const data = snap.data();
+                if (!data) return;
+                if (!gameStarted && data.player1 && data.player2) {
+                    const oppSecret = playerId === 1 ? data.player2.secret : data.player1.secret;
+                    initializeGame(oppSecret, data.digits);
+                    waitingScreen.classList.add('hidden');
+                    gameStarted = true;
+                }
+                if (data.guesses) {
+                    historyList.innerHTML = '';
+                    data.guesses.forEach(g => addHistoryEntry(g.guess, g.result));
+                    attemptCounter.textContent = data.guesses.length;
+                }
+                guessButton.disabled = data.turn !== playerId;
+            });
+        }
+
         // === Initial Setup & Event Listeners ===
         createNumpad();
-        
-        startGameButton.addEventListener('click', initializeGame);
+
+        const urlSession = new URLSearchParams(location.search).get('session');
+        if (urlSession) {
+            sessionCodeEl.textContent = urlSession;
+            showMultiplayerSetup(true);
+        } else {
+            showMode();
+        }
+
+        startGameButton.addEventListener('click', () => initializeGame());
         backToSettingsButton.addEventListener('click', returnToSettings);
         guessButton.addEventListener('click', handleGuess);
+        singlePlayerBtn.addEventListener('click', () => { modeScreen.classList.add('hidden'); settingsScreen.classList.remove('hidden'); });
+        multiPlayerBtn.addEventListener('click', () => showMultiplayerSetup());
+        backModeBtn.addEventListener('click', showMode);
+        createSessionBtn.addEventListener('click', createSession);
+        joinSessionBtn.addEventListener('click', joinSession);
         
         numpad.addEventListener('click', (event) => {
             const target = event.target.closest('.numpad-btn');
