@@ -626,7 +626,11 @@
                 const players = currentSession.players;
                 const opponentId = Object.keys(players).find(id => id !== playerId);
 
-                if (players[playerId]?.secret && players[opponentId]?.secret && currentSession.status === 'waiting') {
+                if (
+                    players[playerId]?.secret &&
+                    players[opponentId]?.secret &&
+                    (currentSession.status === 'waiting' || currentSession.status === 'setup')
+                ) {
                     updateDoc(ref, { status: 'playing' });
                 }
 
