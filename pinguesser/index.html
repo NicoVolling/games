@@ -496,8 +496,8 @@
         });
 
         async function processMultiplayerGuess(guess) {
-            if (typeof processMultiplayerGuessImpl === 'function') {
-                await processMultiplayerGuessImpl(guess);
+            if (typeof window.processMultiplayerGuessImpl === 'function') {
+                await window.processMultiplayerGuessImpl(guess);
             }
         }
     </script>
@@ -682,7 +682,7 @@
             });
         }
 
-        async function processMultiplayerGuessImpl(guess) {
+        window.processMultiplayerGuessImpl = async function(guess) {
             const players = currentSession.players;
             const opponentId = Object.keys(players).find(id => id !== playerId);
             const secret = players[opponentId].secret;
