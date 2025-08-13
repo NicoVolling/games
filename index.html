@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spielauswahl</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <main class="min-h-screen flex flex-col items-center justify-center p-4">
+        <h1 class="text-3xl md:text-4xl font-bold mb-10 text-indigo-600">Wähle ein Spiel</h1>
+        <div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+            <a href="pinguesser/" class="group bg-white rounded-xl shadow-lg p-6 flex flex-col items-center hover:shadow-2xl hover:-translate-y-1 transform transition">
+                <div class="text-5xl mb-4">🔐</div>
+                <h2 class="text-xl font-semibold mb-2 group-hover:text-indigo-600">Pin Guesser</h2>
+                <p class="text-sm text-gray-600 text-center">Errate den geheimen PIN-Code</p>
+            </a>
+        </div>
+    </main>
+</body>
+</html>
